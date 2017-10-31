@@ -1,8 +1,8 @@
 package org.bom4v.ti
 
 //import org.apache.spark._
-//import org.apache.spark.sql.functions._
-//import org.apache.spark.sql.types._
+import org.apache.spark.sql.functions.not
+import org.apache.spark.sql.types.{StructType,StructField,StringType,IntegerType,DoubleType}
 //import org.apache.spark.sql._
 //import org.apache.spark.sql.Dataset
 import org.apache.spark.ml.Pipeline
@@ -18,13 +18,28 @@ import org.apache.spark.ml.feature.VectorAssembler
 /**
   * Schema for the churn model 
   */
-case class Account (state: String, len: Integer, acode: String,
-  intlplan: String, vplan: String, numvmail: Double,
-  tdmins: Double, tdcalls: Double, tdcharge: Double,
-  temins: Double, tecalls: Double, techarge: Double,
-  tnmins: Double, tncalls: Double, tncharge: Double,
-  timins: Double, ticalls: Double, ticharge: Double,
-  numcs: Double, churn: String)
+case class Account (
+  state: String,
+  len: Integer,
+  acode: String,
+  intlplan: String,
+  vplan: String,
+  numvmail: Double,
+  tdmins: Double,
+  tdcalls: Double,
+  tdcharge: Double,
+  temins: Double,
+  tecalls: Double,
+  techarge: Double,
+  tnmins: Double,
+  tncalls: Double,
+  tncharge: Double,
+  timins: Double,
+  ticalls: Double,
+  ticharge: Double,
+  numcs: Double,
+  churn: String
+)
 
 /**
   * Application
@@ -33,7 +48,8 @@ object Demonstrator extends App {
 
   /**
     * Headers:
-    *  State, Account length,
+    *  State,
+    *  Account length,
     *  Area code,
     *  International plan,
     *  Voice mail plan,
@@ -83,6 +99,7 @@ object Demonstrator extends App {
   val spark = org.apache.spark.sql.SparkSession
     .builder()
     .appName("SparkSessionForInductionOnChurnPrediction")
+    .config("spark.master", "local")
     .getOrCreate()
 
   //
@@ -92,7 +109,8 @@ object Demonstrator extends App {
   val train: org.apache.spark.sql.Dataset[Account] = spark.read
     .option("inferSchema", "false")
     .schema(schema)
-    .csv("data/churn-bigml-80.csv")
+    .option("header", "true")
+    .csv("data/churn/churn-bigml-80.csv")
     .as[Account]
 
   //
@@ -106,7 +124,8 @@ object Demonstrator extends App {
   val test: org.apache.spark.sql.Dataset[Account] = spark.read
     .option("inferSchema", "false")
     .schema(schema)
-    .csv("data/churn-bigml-20.csv")
+    .option("header", "true")
+    .csv("data/churn/churn-bigml-20.csv")
     .as[Account]
 
   //
@@ -118,20 +137,20 @@ object Demonstrator extends App {
 
   //
   train.printSchema()
-  train.show
+  train.show()
   train.createOrReplaceTempView("account")
   spark.catalog.cacheTable("account")
 
-  train.groupBy("churn").count.show
+  train.groupBy("churn").count.show()
 
   val fractions = Map("False" -> .17, "True" -> 1.0)
   //Here we're keeping all instances of the Churn=True class, but downsampling the Churn=False class to a fraction of 388/2278.
   val strain = train.stat.sampleBy("churn", fractions, 36L)
 
-  strain.groupBy("churn").count.show
+  strain.groupBy("churn").count.show()
   val ntrain = strain.drop("state").drop("acode").drop("vplan").drop("tdcharge").drop("techarge")
   println(ntrain.count)
-  ntrain.show
+  ntrain.show()
 
   val ipindexer = new StringIndexer()
     .setInputCol("intlplan")
@@ -188,7 +207,7 @@ object Demonstrator extends App {
   println(metrics.fMeasureByThreshold())
 
   val result = predictions.select("label", "prediction", "probability")
-  result.show
+  result.show()
 
   val lp = predictions.select("label", "prediction")
   val counttotal = predictions.count()
@@ -217,7 +236,7 @@ object Demonstrator extends App {
     "double(round(prediction)) as prediction", "label",
     """CASE double(round(prediction)) = label WHEN true then 1 ELSE 0 END as equal"""
   )
-  equalp.show
+  equalp.show()
 
   // Stop Spark
   spark.stop()
